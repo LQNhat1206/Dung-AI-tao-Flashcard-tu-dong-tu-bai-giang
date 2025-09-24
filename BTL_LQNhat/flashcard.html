@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Flashcard Ngữ Văn</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.16/mammoth.browser.min.js"></script>
+</head>
+<body class="bg-gray-100">
+  <nav class="bg-blue-600 p-4 text-white flex justify-between">
+    <span>Xin chào, {{ username }} 👋</span>
+    <a href="/logout" class="bg-red-500 px-3 py-1 rounded">Đăng xuất</a>
+  </nav>
+
+  <div class="container mx-auto mt-6 p-6 bg-white rounded shadow">
+    <h1 class="text-3xl font-bold mb-4">Flashcard Ngữ Văn</h1>
+    <input type="file" id="upload" class="mb-4">
+
+    <div id="flashcards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+  </div>
+
+  <script>
+    document.getElementById("upload").addEventListener("change", function(event) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        mammoth.extractRawText({ arrayBuffer: event.target.result })
+          .then(function(result) {
+            const text = result.value.split("\n").filter(line => line.trim() !== "");
+            const flashcardsDiv = document.getElementById("flashcards");
+            flashcardsDiv.innerHTML = "";
+
+            text.forEach((line, index) => {
+              const card = document.createElement("div");
+              card.className = "p-4 bg-blue-100 rounded shadow cursor-pointer";
+              card.innerHTML = `<p class="font-bold">Câu hỏi ${index+1}</p><p>${line}</p>`;
+              flashcardsDiv.appendChild(card);
+            });
+          });
+      };
+      reader.readAsArrayBuffer(this.files[0]);
+    });
+  </script>
+</body>
+</html>

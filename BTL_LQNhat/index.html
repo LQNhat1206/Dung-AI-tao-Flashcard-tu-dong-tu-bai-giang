@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập / Đăng ký</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex items-center justify-center">
+
+  <div class="bg-white shadow-lg rounded-xl p-8 w-96 text-center">
+    <h1 class="text-2xl font-bold mb-6 text-blue-600">📚 Flashcard Ngữ Văn</h1>
+
+    <div id="form-container">
+      <!-- Form đăng nhập -->
+      <div id="login-form">
+        <h2 class="text-lg font-semibold mb-3">Đăng nhập</h2>
+        <input id="login-username" type="text" placeholder="Tên đăng nhập" class="border w-full p-2 rounded mb-3">
+        <input id="login-password" type="password" placeholder="Mật khẩu" class="border w-full p-2 rounded mb-3">
+        <button onclick="login()" class="bg-blue-500 hover:bg-blue-600 text-white w-full py-2 rounded">Đăng nhập</button>
+        <p class="mt-4 text-sm">Chưa có tài khoản? <a href="#" onclick="showRegister()" class="text-blue-600">Đăng ký</a></p>
+      </div>
+
+      <!-- Form đăng ký -->
+      <div id="register-form" class="hidden">
+        <h2 class="text-lg font-semibold mb-3">Đăng ký</h2>
+        <input id="register-username" type="text" placeholder="Tên đăng nhập" class="border w-full p-2 rounded mb-3">
+        <input id="register-password" type="password" placeholder="Mật khẩu" class="border w-full p-2 rounded mb-3">
+        <button onclick="register()" class="bg-green-500 hover:bg-green-600 text-white w-full py-2 rounded">Đăng ký</button>
+        <p class="mt-4 text-sm">Đã có tài khoản? <a href="#" onclick="showLogin()" class="text-blue-600">Đăng nhập</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showRegister() {
+      document.getElementById("login-form").classList.add("hidden");
+      document.getElementById("register-form").classList.remove("hidden");
+    }
+
+    function showLogin() {
+      document.getElementById("register-form").classList.add("hidden");
+      document.getElementById("login-form").classList.remove("hidden");
+    }
+
+    function register() {
+      const username = document.getElementById("register-username").value;
+      const password = document.getElementById("register-password").value;
+      if (!username || !password) {
+        alert("Vui lòng nhập đủ thông tin!");
+        return;
+      }
+      if (localStorage.getItem("user_" + username)) {
+        alert("Tên đăng nhập đã tồn tại!");
+        return;
+      }
+      localStorage.setItem("user_" + username, password);
+      alert("Đăng ký thành công! Hãy đăng nhập.");
+      showLogin();
+    }
+
+    function login() {
+      const username = document.getElementById("login-username").value;
+      const password = document.getElementById("login-password").value;
+      const savedPassword = localStorage.getItem("user_" + username);
+      if (!savedPassword || savedPassword !== password) {
+        alert("Sai tài khoản hoặc mật khẩu!");
+        return;
+      }
+      localStorage.setItem("loggedInUser", username);
+      window.location.href = "flashcards.html"; // Chuyển sang trang flashcards
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flashcard Sinh Viên</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#ffe6f7,#e0f7fa);color:#333}
+    .page-wrap{max-width:1200px;margin:0 auto;padding:0 16px}
+    /* Card flip */
+    .flip-card{perspective:1200px; width:300px; min-width:260px; margin:0 auto;}
+    /* tăng min-height để đủ không gian cho question + options */
+    .flip-card-inner{position:relative;width:100%;min-height:380px;transition:transform .8s ease-in-out;transform-style:preserve-3d}
+    .flip-card.flipped .flip-card-inner{transform:rotateY(180deg)}
+    .flip-card-front,.flip-card-back{
+      position:absolute;inset:0;backface-visibility:hidden;border-radius:16px;
+      box-shadow:0 12px 25px rgba(0,0,0,.15);
+      /* Xếp dọc: question trên, options dưới; gap để tránh chồng chữ */
+      display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;
+      padding:18px 18px 14px 18px;text-align:left;gap:12px;overflow:hidden;box-sizing:border-box;
+    }
+    .flip-card-front{background:linear-gradient(145deg,#fff4e6,#ffe6f7);border:2px solid #ff8fab;color:#222}
+    .flip-card-back{background:linear-gradient(145deg,#e0f7fa,#fffde7);border:2px solid #80deea;color:#065f46;transform:rotateY(180deg)}
+    /* Responsive question: auto scale + clamp lines */
+    .question{
+      font-size:clamp(1rem,1.6vw,1.15rem);
+      font-weight:800;margin:0;padding:6px 6px 0 6px;
+      display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;
+      -webkit-line-clamp:3; /* show max 3 lines by default */
+      word-break:break-word; hyphens:auto; cursor:pointer;
+      width:100%; text-align:left;
+      /* chắc chắn question không bị đè: đặt position relative */
+      position:relative; z-index:1;
+    }
+    .question.expanded{
+      -webkit-line-clamp:unset; overflow:visible; white-space:normal;
+    }
+
+    /* wrapper cho các lựa chọn: đảm bảo hiển thị phía dưới và scroll khi cần */
+    .options-wrapper{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin-top:8px;width:100%;max-height:180px;overflow:auto;padding-right:6px;box-sizing:border-box;}
+
+    .option{
+      width:100%; /* đầy đủ chiều ngang trong wrapper */
+      background:rgba(255,255,255,.95);border:2px solid #e5e7eb;
+      margin:0;padding:10px 12px;border-radius:10px;cursor:pointer;transition:.25s;font-weight:600;
+      box-sizing:border-box; text-align:center;
+    }
+    .option:hover{background:#fce4ec;border-color:#f48fb1}
+    .option.correct{background:#c8e6c9;border-color:#388e3c;color:#1b5e20}
+    .option.wrong{background:#ffcdd2;border-color:#c62828;color:#b71c1c}
+    .option.disabled{pointer-events:none;opacity:.85;border-style:dashed;color:#9c3a3a}
+    .no-options{
+      width:100%;padding:12px;border-radius:10px;margin:10px 0;
+      border:2px dashed rgba(244,143,177,.6);background:linear-gradient(180deg,#fff,#fff);
+      color:#c62828;font-weight:700;text-align:center;box-sizing:border-box;
+    }
+    .speak-btn{
+      margin-top:8px;background:#ff80ab;color:#fff;border:none;padding:8px 14px;border-radius:10px;
+      cursor:pointer;transition:.25s;font-weight:700;align-self:center;
+    }
+    .speak-btn:hover{background:#f50057}
+
+    /* small helper */
+    .expand-btn{font-size:.85rem;color:#6b21a8;background:transparent;border:0;cursor:pointer;text-decoration:underline;margin-top:6px}
+
+    /* modal (AI) */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:60}
+    .modal{background:white;border-radius:12px;padding:18px;width:95%;max-width:720px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+    .modal textarea{width:100%;min-height:160px;border:1px solid #e5e7eb;border-radius:8px;padding:8px;resize:vertical}
+    .loader{display:inline-block;width:18px;height:18px;border:3px solid #eee;border-top-color:#ff80ab;border-radius:50%;animation:spin .9s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ensure header above content if sticky */
+    header{position:sticky;top:0;z-index:50}
+    main{padding-top:18px}
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- HEADER -->
+  <header class="bg-pink-500 text-white py-4 shadow-lg">
+    <div class="page-wrap flex items-center justify-between gap-3">
+      <h1 class="text-2xl font-extrabold tracking-wide">🎓 Flashcard Sinh Viên</h1>
+      <div class="flex gap-2 flex-wrap">
+        <button type="button" onclick="openAiModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow">🤖 Tóm tắt bài bằng AI</button>
+        <button type="button" onclick="addRandomCards()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow">+ Thêm câu hỏi</button>
+        <button type="button" onclick="clearAll()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow">🗑 Xóa tất cả</button>
+        <button type="button" onclick="location.reload()" class="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded-lg shadow">Thoát</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- GRID -->
+  <main class="page-wrap py-6">
+    <div id="flashcards" class="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"></div>
+  </main>
+
+  <!-- AI Modal -->
+  <div id="aiModal" class="hidden">
+    <div class="modal-backdrop" onclick="closeAiModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-bold">Tạo tóm tắt bằng AI</h2>
+          <button onclick="closeAiModal()" class="text-gray-600">Đóng ✕</button>
+        </div>
+        <p class="text-sm text-gray-600 mt-2">Dán nội dung bài giảng (hoặc URL / slide) vào ô bên dưới. Chọn kiểu tóm tắt và nhấn Tạo.</p>
+        <textarea id="lectureText" placeholder="Dán nội dung ở đây..."></textarea>
+        <div class="mt-3 flex items-center gap-2">
+          <select id="summaryStyle" class="border rounded px-2 py-1">
+            <option value="short">Ngắn (3-5 câu)</option>
+            <option value="bullets">Gạch đầu dòng</option>
+            <option value="detailed">Chi tiết (1 đoạn)</option>
+          </select>
+          <button id="generateBtn" onclick="createSummary()" class="bg-indigo-600 text-white px-3 py-1 rounded">Tạo tóm tắt</button>
+          <div id="aiStatus" class="ml-2 text-sm"></div>
+        </div>
+        <div id="summaryResult" class="mt-4"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    
+    let flashcards = [];
+
+    // Chọn giọng Việt nếu có
+    let viVoice = null;
+    function pickViVoice(){
+      const voices = window.speechSynthesis.getVoices();
+      viVoice = voices.find(v => (v.lang||'').toLowerCase().startsWith('vi'))
+             || voices.find(v => /viet|việt/i.test(v.name||'')) || null;
+    }
+    speechSynthesis.onvoiceschanged = pickViVoice; pickViVoice();
+
+    function handleSpeak(ev, encoded){
+      ev.stopPropagation();
+      const text = decodeURIComponent(encoded||'');
+      const msg = new SpeechSynthesisUtterance(text);
+      msg.lang = 'vi-VN';
+      if (viVoice) msg.voice = viVoice;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(msg);
+    }
+
+    // Ngân hàng câu hỏi (giữ nguyên hoặc mở rộng)
+    const questionBank = [
+      { question:"Kỹ năng nào được coi là quan trọng nhất đối với sinh viên trong thế kỷ 21?",
+        options:["Kỹ năng ghi nhớ","Tư duy phản biện","Ngồi nghe thụ động","Làm việc cá nhân"],
+        answer:"Tư duy phản biện",
+        explanation:"Sinh viên cần tư duy phản biện để phân tích và đánh giá thông tin, không chỉ ghi nhớ."},
+      { question:"Trong học thuật, 'đạo văn' (plagiarism) nghĩa là gì?",
+        options:["Viết luận văn","Tự sáng tạo","Sao chép không trích dẫn","Thảo luận nhóm"],
+        answer:"Sao chép không trích dẫn",
+        explanation:"Đạo văn là lấy nội dung/ý tưởng của người khác mà không ghi nguồn."},
+      { question:"Nhà văn nào được coi là 'ông hoàng truyện ngắn' Việt Nam?",
+        options:["Nguyễn Du","Nam Cao","Nguyễn Huy Thiệp","Kim Lân"],
+        answer:"Nam Cao",
+        explanation:"Nam Cao nổi bật với truyện ngắn hiện thực phê phán sâu sắc."},
+      { question:"Ví dụ: câu hỏi chưa có lựa chọn", options:[], answer:"", explanation:"Ví dụ minh họa cho trường hợp không có options."},
+      { question:"Trong lĩnh vực công nghệ, 'Big Data' dùng để chỉ?",
+        options:["Dữ liệu nhỏ","Dữ liệu khổng lồ","Ứng dụng văn phòng","Máy tính cá nhân"],
+        answer:"Dữ liệu khổng lồ",
+        explanation:"Big Data là tập dữ liệu cực lớn, phức tạp, cần công nghệ đặc biệt để xử lý."},
+      { question:"Nhân vật nào trong 'Vợ nhặt' của Kim Lân đã lấy vợ trong nạn đói 1945?",
+        options:["Tràng","Chí Phèo","Thị Nở","Lão Hạc"],
+        answer:"Tràng",
+        explanation:"Tràng lấy vợ giữa nạn đói, thể hiện khát vọng sống."},
+      { question:"Khi làm việc nhóm, yếu tố nào giúp nhóm hoạt động hiệu quả nhất?",
+        options:["Ngồi im lặng","Lắng nghe và tôn trọng ý kiến","Áp đặt ý kiến","Tránh tranh luận"],
+        answer:"Lắng nghe và tôn trọng ý kiến",
+        explanation:"Giao tiếp và lắng nghe giúp nhóm phát triển ý tưởng chung."},
+      { question:"Trong Excel, phím tắt để sao chép là gì?",
+        options:["Ctrl + Z","Ctrl + C","Ctrl + V","Ctrl + X"],
+        answer:"Ctrl + C",
+        explanation:"Ctrl + C là phím tắt chuẩn để sao chép."},
+      { question:"GPA là viết tắt của cụm từ nào?",
+        options:["General Point Average","Grade Point Average","Global Point Average","Graduate Performance Average"],
+        answer:"Grade Point Average",
+        explanation:"GPA = điểm trung bình học tập theo thang điểm chuẩn."}
+    ];
+
+    function renderFlashcards(){
+      const box = document.getElementById('flashcards');
+      box.innerHTML = '';
+      flashcards.forEach((card, i) => {
+        const hasOpts = Array.isArray(card.options) && card.options.length > 0;
+        // bọc options vào wrapper để đảm bảo hiển thị dưới question
+        const opts = hasOpts ? `<div class="options-wrapper">${card.options.map(opt => `
+          <div class="option" onclick="checkAnswer(this,'${encodeURIComponent(opt)}','${encodeURIComponent(card.answer||'')}',${i})">${escapeHtml(opt)}</div>
+        `).join('')}</div>` : `<div class="options-wrapper"><div class="no-options">Không có đáp án để chọn</div></div>`;
+
+        // nếu không có options, thêm nút xem đáp án (mở mặt sau)
+        const showAnswerBtn = hasOpts ? '' : `<button type="button" class="speak-btn" onclick="flipCard(${i})">🔍 Xem đáp án</button>`;
+
+        box.innerHTML += `
+          <div class="flip-card" id="card-${i}">
+            <div class="flip-card-inner">
+              <div class="flip-card-front">
+                <p class="question" id="q-${i}" onclick="toggleExpand(${i})">⚡ ${escapeHtml(card.question)}</p>
+                ${opts}
+                <div style="display:flex;justify-content:center;width:100%">
+                  <button type="button" class="speak-btn" onclick="handleSpeak(event,'${encodeURIComponent(card.question||'')}')">🔊 Đọc câu hỏi</button>
+                </div>
+                ${showAnswerBtn}
+              </div>
+              <div class="flip-card-back">
+                <p><b>Đáp án đúng:</b> ${escapeHtml(card.answer || 'Chưa có đáp án')}</p>
+                <p class="mt-2 italic max-w-[90%]">${escapeHtml(card.explanation||'')}</p>
+                <button type="button" class="speak-btn" onclick="handleSpeak(event,'${encodeURIComponent('Đáp án đúng là: ' + (card.answer||'Chưa có đáp án') + '. ' + (card.explanation||''))}')">🔊 Đọc đáp án</button>
+              </div>
+            </div>
+          </div>`;
+      });
+    }
+
+    // prevent XSS-ish content in innerHTML injection
+    function escapeHtml(s){
+      return String(s)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'",'&#39;');
+    }
+
+    function checkAnswer(el, chosenEnc, correctEnc, index){
+      const chosen = decodeURIComponent(chosenEnc);
+      const correct = decodeURIComponent(correctEnc);
+      el.parentElement.querySelectorAll('.option').forEach(o=>o.classList.remove('wrong'));
+      // nếu không có đáp án đúng được cài (correct empty) -> show trạng thái và lật sang mặt sau
+      if(!correct){
+        el.classList.add('wrong');
+        el.parentElement.querySelectorAll('.option').forEach(o=>o.style.pointerEvents='none');
+        setTimeout(()=>flipCard(index), 700);
+        return;
+      }
+      if(chosen === correct){
+        el.classList.add('correct');
+        el.parentElement.querySelectorAll('.option').forEach(o=>o.style.pointerEvents='none');
+        setTimeout(()=>flipCard(index), 600);
+      }else{
+        el.classList.add('wrong');
+      }
+    }
+
+    function flipCard(index){
+      document.getElementById('card-'+index).classList.add('flipped');
+    }
+
+    function toggleExpand(index){
+      const q = document.getElementById('q-'+index);
+      if(!q) return;
+      q.classList.toggle('expanded');
+    }
+
+    // Thêm ngẫu nhiên từ ngân hàng, tránh trùng câu hỏi đã có
+    function addRandomCards(){
+      const count = parseInt(prompt('Bạn muốn thêm bao nhiêu câu hỏi?', 4),10);
+      if (isNaN(count) || count <= 0){ alert('Số không hợp lệ!'); return; }
+
+      const currentQs = new Set(flashcards.map(c=>c.question));
+      const pool = questionBank.filter(q=>!currentQs.has(q.question));
+      if (pool.length === 0){ alert('Hết câu hỏi trong ngân hàng!'); return; }
+
+      const shuffled = [...pool].sort(()=>Math.random()-0.5);
+      const toAdd = shuffled.slice(0, Math.min(count, shuffled.length));
+      flashcards = [...flashcards, ...toAdd];
+      renderFlashcards();
+      document.getElementById('flashcards').scrollIntoView({behavior:'smooth',block:'start'});
+    }
+
+    function clearAll(){
+      if(confirm('Bạn có chắc muốn xóa tất cả flashcards?')){
+        flashcards = [];
+        renderFlashcards();
+      }
+    }
+
+    // Khởi tạo — HIỆN 4 CÂU KHI MỞ TRANG
+    flashcards = questionBank.slice(0,3);
+    renderFlashcards();
+
+    /* ---------------- AI modal + gọi server ---------------- */
+    function openAiModal(){ document.getElementById('aiModal').classList.remove('hidden'); }
+    function closeAiModal(ev){
+      if(ev && ev.target && ev.target.classList && ev.target.classList.contains('modal-backdrop')) return; // click on backdrop allowed
+      document.getElementById('aiModal').classList.add('hidden');
+      document.getElementById('aiStatus').innerHTML='';
+      document.getElementById('summaryResult').innerHTML='';
+    }
+
+    async function createSummary(){
+      const text = document.getElementById('lectureText').value.trim();
+      const style = document.getElementById('summaryStyle').value;
+      if(!text){ alert('Vui lòng dán nội dung bài giảng vào ô'); return; }
+      const status = document.getElementById('aiStatus');
+      const btn = document.getElementById('generateBtn');
+      status.innerHTML = '<span class="loader" aria-hidden="true"></span> Đang tạo...';
+      btn.disabled = true;
+      try{
+        const resp = await fetch('/api/summarize', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ text, style })
+        });
+        const data = await resp.json();
+        if(resp.ok){
+          document.getElementById('summaryResult').innerHTML = `<h3 class="font-bold">Kết quả</h3><div class="mt-2 whitespace-pre-wrap">${escapeHtml(data.summary)}</div>`;
+        } else {
+          document.getElementById('summaryResult').innerHTML = `<div class="text-red-600">Lỗi: ${escapeHtml(data.error || JSON.stringify(data))}</div>`;
+        }
+      }catch(err){
+        document.getElementById('summaryResult').innerHTML = `<div class="text-red-600">Lỗi khi gọi server: ${escapeHtml(err.message||err)}</div>`;
+      }finally{
+        status.innerHTML='';
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+
+</html>
